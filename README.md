@@ -68,6 +68,7 @@ result <- scPlantGM(query, reference, species, organ, custom)
 
 ## Result
 The prediction result will be stored as a data.frame as follows:
+
 <img width="289" alt="38066e856f5742ea8bff53e7115483d" src="https://github.com/user-attachments/assets/3fb76cb9-9107-4deb-b371-eee04b3f9d46" />
 
 
