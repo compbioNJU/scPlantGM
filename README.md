@@ -17,7 +17,7 @@ devtools::install_github("XuanKunXK/scPlantGM")
 
 # Usage
 ## Prerequisite
-Your data should be processed by classic Seurat pipnline until finishing clustering. Data preprocessing pipnline refers to [Seurat](https://satijalab.org/seurat/)
+Your data should be processed by classic Seurat pipnline until finishing clustering. Data preprocessing pipnline refers to [Seurat](https://satijalab.org/seurat/).
 
 ## Data preprocession
 User must preprocess Seurat data before prediction as follows:
@@ -73,7 +73,7 @@ The prediction result will be stored as a data.frame as follows:
 
 
 ## Advanced usage
-- layer_info: a format-fixed data.frame includes layers information (will be ignored if custom='None'). A example shown in data/layer_info_example.csv
+- layer_info: a format-fixed data.frame includes layers information (will be ignored if custom='None'). A example shown in data/layer_info_example.rda
 - layer: layer of prediction: must be an int (0,1,2...). In `None` and `Semi` mode, user can choose one of built-in layer: Arabidopis(`1`,`2`,`3`), Maize(`1`,`2`), Rice(`1`,`2`)
 - p_thres: a threshold for determining what level of module purity is acceptable. The higher the value, the purer the module are.
 - m_thres: a threshold for determining how many modules can be accepted. The higher the value, the more modules can be accepted.
