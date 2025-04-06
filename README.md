@@ -68,7 +68,8 @@ result <- scPlantGM(query, reference, species, organ, custom)
 
 ## Result
 The prediction result will be stored as a data.frame as follows:
-<img width="425" alt="1743919844923" src="https://github.com/user-attachments/assets/434b2e44-34b7-4d46-a4d0-b33cc7085119" />
+<img width="289" alt="38066e856f5742ea8bff53e7115483d" src="https://github.com/user-attachments/assets/3fb76cb9-9107-4deb-b371-eee04b3f9d46" />
+
 
 ## Advanced usage
 - layer_info: a format-fixed data.frame includes layers information (will be ignored if custom='None'). A example shown in data/layer_info_example.csv
