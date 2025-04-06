@@ -10,6 +10,7 @@
 #' @param p_thres a threshold for determining what level of module purity is acceptable. The higher the value, the purer the module are
 #' @param m_thres a threshold for determining how many modules can be accepted. The higher the value, the more modules can be accepted 
 #' @param x_thres a threshold for determining whether the cell type should be ‘unknown’
+#' @param cores numbers of CPU for running
 #'
 #' @return prediction result in data.frame
 #' @export
@@ -17,7 +18,7 @@
 #' @examples result -> scPlantGM(query, reference, species = 'Maize', organ = 'Root', layer = 0, custom = 'None')
 
 scPlantGM <- function(query, reference, species, organ,
-                                custom = 'None', layer_info, layer=0, 
+                                custom = 'None', layer_info=NA, layer=0, 
                                 p_thres=0.8, m_thres=0.9, x_thres=0.1, cores=NA){
     require(dplyr)
     require(tidyr)
@@ -45,7 +46,9 @@ scPlantGM <- function(query, reference, species, organ,
         info_reference <- info_reference %>% filter(Organ==organ)
     } else if(custom == 'All') {
         info_reference <- get_info(reference, type ='reference')
-        info_reference <- get_layers(info_reference, layer_info)
+        if (layer_info != NA){
+            info_reference <- get_layers(info_reference, layer_info)
+        }
         jaccard_mat_ref <- get_jaccardmat(reference,type = 'reference',cores)
     } else if (custom == 'Semi') {
         info_reference1 <- get_info(reference, type='reference')
@@ -59,7 +62,9 @@ scPlantGM <- function(query, reference, species, organ,
                            select('Sample', 'Annotation', 'Cell','Cluster') %>% 
                            filter(Annotation %in% setdiff(unique(unlist(layer_info)),'/'))
         info_reference <- rbind(info_reference1,info_reference2)
-        info_reference <- get_layers(info_reference,layer_info)
+        if (layer_info != NA){
+            info_reference <- get_layers(info_reference,layer_info)
+        }
 
         jaccard_mat_ref <- fuse_ref_jm(jaccard_mat_ref1,jaccard_mat_ref2,info_reference2,cores)
     } else {

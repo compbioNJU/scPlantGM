@@ -10,7 +10,7 @@ scPlantGM(
   species,
   organ,
   custom = "None",
-  layer_info,
+  layer_info = NA,
   layer = 0,
   p_thres = 0.8,
   m_thres = 0.9,
@@ -38,6 +38,8 @@ scPlantGM(
 \item{m_thres}{a threshold for determining how many modules can be accepted. The higher the value, the more modules can be accepted}
 
 \item{x_thres}{a threshold for determining whether the cell type should be ‘unknown’}
+
+\item{cores}{numbers of CPU for running}
 }
 \value{
 prediction result in data.frame
