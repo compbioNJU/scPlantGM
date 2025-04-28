@@ -12,9 +12,6 @@ library(devtools)
 devtools::install_github("XuanKunXK/scPlantGM")
 ```
 
-# Citation
-Kaiyan Lu, Kun Xuan, Yuelei Zhang, Yueyi Wang, Guangshuo Cao, Zhengxi Qian & Dijun Chen. Comprehensive Annotation of Plant Cell Atlases Across Species Based on Gene Modules. (2025)
-
 # Usage
 ## Prerequisite
 Your data should be processed by classic Seurat pipnline until finishing clustering. Data preprocessing pipnline refers to [Seurat](https://satijalab.org/seurat/).
@@ -87,4 +84,4 @@ More comprehensive arguments of scPlantGM
 Lu, K., et al. A gene module-based framework for plant cell atlas annotation and cross-species marker gene discovery.
 
 # Contact us
-If you have any question, suggestion or bug found in the method, feel free to contact us! Email: XuanKunXK@gmail.com
+If you have any question, suggestion or bug found in the method, feel free to contact us! Email: dijunchen@nju.edu.cn; Lukaiyann@163.com
