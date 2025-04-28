@@ -4,9 +4,6 @@
 # Overview
 <img width="779" alt="17597cda3b3a538529cfcdd23c9e301" src="https://github.com/user-attachments/assets/d1efd773-230b-4f19-8b43-c1d693b3c084" />
 
-# Reference
-Before usage, please remember to cite our work. Comprehensive Annotation of Plant Cell Atlases Across Species Based on Gene Modules.(will be a link here)
-
 # Installation
 You can install `scPlantGM` through devtools as follows:
 
@@ -82,6 +79,9 @@ More comprehensive arguments of scPlantGM
 - `cores`: numbers of CPU for running.
 
 # Q&A
+
+# Citation
+Lu, K., et al. A gene module-based framework for plant cell atlas annotation and cross-species marker gene discovery.
 
 # Contact us
 If you have any question, suggestion or bug found in the method, feel free to contact us! Email: XuanKunXK@gmail.com
