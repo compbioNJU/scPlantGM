@@ -12,6 +12,9 @@ library(devtools)
 devtools::install_github("XuanKunXK/scPlantGM")
 ```
 
+# Citation
+Kaiyan Lu, Kun Xuan, Yuelei Zhang, Yueyi Wang, Guangshuo Cao, Zhengxi Qian & Dijun Chen. Comprehensive Annotation of Plant Cell Atlases Across Species Based on Gene Modules. (2025)
+
 # Usage
 ## Prerequisite
 Your data should be processed by classic Seurat pipnline until finishing clustering. Data preprocessing pipnline refers to [Seurat](https://satijalab.org/seurat/).
@@ -26,7 +29,7 @@ query <- process_obj(query, seuorder, 'query')
 
 reference <- process_obj(reference, seuorder, 'reference')
 ```
-### Annotate reference
+### Annotate reference (additionally)
 If you want to use your own reference, please don't forget to add annotation infomation into reference Seurat objects manually.
 
 ```r
