@@ -5,20 +5,22 @@
 #' @return markers
 #'
 #' @export
-get_markers <- function(rds){
+get_markers <- function(rds, cores){
     require(dplyr)
     require(doMC)
     seurat_obj <- rds
 
-    registerDoMC(8)
+    cl <- makeCluster(cores)
+    registerDoParallel(cl)
+
     #seurat_obj$seurat_clusters <- seurat_obj$integrated_snn_res.0.8
     Idents(seurat_obj) <- "seurat_clusters"
     csx <- table(seurat_obj$seurat_clusters)
     if(all(csx > 5)){
-        top.markers <- foreach(i=sort(unique(seurat_obj$seurat_clusters)),.combine=rbind) %dopar% {
+        top.markers <- foreach(i=sort(unique(seurat_obj$seurat_clusters)),.combine=rbind, .packages = "Seurat") %dopar% {
             if(csx[as.character(i)]>5){
             o <- FindMarkers(seurat_obj, ident.1=i, only.pos=TRUE, min.pct=0.1, logfc.threshold=0.1,verbose = FALSE)
-            data.frame(o, name=rownames(o), cluster=i)
+            data.frame(o, gene=rownames(o), cluster=i)
             }else{
             NULL
             }
@@ -27,14 +29,12 @@ get_markers <- function(rds){
         top.markers <- FindAllMarkers(seurat_obj, min.pct=0.1, logfc.threshold=0.1,
                                         return.thresh=0.1, only.pos=TRUE, verbose = FALSE) ## return.thresh=0.01, test.use="wilcox"
     }
-
-    if (!('name' %in% colnames(top.markers))){
-      top.markers$name = top.markers$gene
-    }
+    stopCluster(cl)
 
     top.markers$pct.diff <- top.markers$pct.1 - top.markers$pct.2
-    ## only keep top 100
+    top.markers$name <- seurat_obj@misc$geneName[top.markers$gene]
 
+    ## only keep top 100
     topmarkers <- top.markers[top.markers$p_val_adj < 0.05,] %>%
         dplyr::group_by(cluster) %>%
         dplyr::top_n(n=100, wt=avg_log2FC)
@@ -76,8 +76,8 @@ get_topmks <- function(misc){
 #' @return dat
 #' @export
 #'
-get_dat <- function(seulist){
-  misc <- get_markers(seulist)
+get_dat <- function(seulist, cores){
+  misc <- get_markers(seulist, cores)
   topmks <- get_topmks(misc)
   assay_sample <- seulist@meta.data$scPlantGM.sample[1:nrow(topmks)]
   topmks_df <- data.table(topmks, assay=assay_sample)
@@ -126,24 +126,20 @@ get_cellstat <- function(rds){
 #'
 #' @export
 get_jaccardmat <- function(seulist,type,cores){
+
     require(Seurat)
     require(dplyr)
     require(foreach)
     require(data.table)
+    require(parallel)
+    require(doParallel)
 
-    cl <- makeCluster(cores)
-    clusterExport(cl, c('get_markers', 'get_topmks', 'get_dat', 'get_cells', 'get_cellstat'))
-    invisible(clusterEvalQ(cl, library(Seurat)))
-    invisible(clusterEvalQ(cl, library(data.table)))
-    registerDoParallel(cl)
 
-    sdat <- parLapply(cl, seulist, get_dat)
-    scells <- parLapply(cl, seulist, get_cells)
+    sdat <- lapply(seulist, function(x) get_dat(x, cores))
+    scells <- lapply(seulist, get_cells) 
 
     dat <- rbindlist(sdat)
     cells <- rbindlist(scells)
-
-    stopCluster(cl)
 
     cellx <- cells %>% group_by(assay) %>% summarize(n=sum(number))
     cellx <- setNames(cellx$n, cellx$assay)
@@ -153,19 +149,20 @@ get_jaccardmat <- function(seulist,type,cores){
     meta <- dat %>% select(assay, cluster) %>% unique()
     rownames(meta) <- sprintf("%s:%s", meta$assay, meta$cluster) 
 
-    cl <- makeCluster(cores)
-    registerDoParallel(cl)
 
     if (type=='query'){
       out = c()
-      return(list(out,dat,cells,meta))
+      return(list(out=out, dat=dat, cells=cells, meta=meta))
     } else {
       meta_assays <- meta$assay  
       meta_clusters <- meta$cluster  
 
       meta_list <- lapply(1:nrow(meta), function(i) {  
-        dat %>% filter(assay == meta_assays[i] & cluster == meta_clusters[i]) %>% pull(name)  
+        dat %>% filter(assay == meta_assays[i] & cluster == meta_clusters[i]) %>% pull(gene)  
       })
+
+      cl <- makeCluster(cores)
+      registerDoParallel(cl)
 
       out <- foreach(i = 1:nrow(meta), .combine = 'rbind') %dopar% {
         x <- meta_list[[i]]
@@ -180,17 +177,29 @@ get_jaccardmat <- function(seulist,type,cores){
         })
         o
       }
+      stopCluster(cl)      
 
-      stopCluster(cl)
       rownames(out) <- rownames(meta)
       colnames(out) <- rownames(meta)
 
       meta <- meta %>% ## mutate(accession=gsub("_.*","",assay)) %>%
-        mutate(clusterN=table(meta$assay)[assay])
+        mutate(clusterN=table(meta$assay)[assay]) %>%
+        as.data.frame()
+      rownames(meta) <- sprintf("%s:%s", meta$assay, meta$cluster) 
       dat <- dat %>% mutate(clusterID=sprintf("%s:%s", assay, cluster)) %>%
-        mutate(markerN=table(clusterID)[clusterID])
+        mutate(markerN=table(clusterID)[clusterID]) %>%
+        as.data.frame()
+      
+      # 过滤marker数量少于3个的cluster
+      delclus <- names(which(table(dat$clusterID)<3))
+      if(length(delclus)>0){
+        out <- out[-which(rownames(out) %in% delclus),-which(rownames(out) %in% delclus)]
+        dat <- dat[-which(dat$clusterID %in% delclus),]
+        cells <- cells[-which(cells$clusterID %in% delclus),]
+        meta <- meta[-which(rownames(meta) %in% delclus),]
+      }
     
-      return(list(out,dat,cells,meta))
+      return(list(out=out,dat=dat,cells=cells,meta=meta))
     }
 }
 
@@ -222,7 +231,7 @@ fuse_ref_jm <- function(jaccard.mat1, jaccard.mat2, info_reference, cores){
   meta_clusters <- meta$cluster  
 
   meta_list <- lapply(1:nrow(meta), function(i) {  
-    dat %>% filter(assay == meta_assays[i] & cluster == meta_clusters[i]) %>% pull(name)  
+    dat %>% filter(assay == meta_assays[i] & cluster == meta_clusters[i]) %>% pull(gene)  
   })
 
   cl <- makeCluster(cores)
@@ -280,14 +289,14 @@ fuse_jaccardmat <- function(jaccard.mat1, jaccard.mat2, cores){
     meta_assays1 <- meta1$assay
     meta_clusters1 <- meta1$cluster
     meta_list1 <- lapply(1:nrow(meta1), function(i) {  
-      dat1 %>% filter(assay == meta_assays1[i] & cluster == meta_clusters1[i]) %>% pull(name)  
+      dat1 %>% filter(assay == meta_assays1[i] & cluster == meta_clusters1[i]) %>% pull(gene)  
     })  
 
     meta_assays2 <- meta2$assay
     meta_clusters2 <- meta2$cluster
     meta_list2 <- lapply(1:nrow(meta2), function(i) {  
-      dat2 %>% filter(assay == meta_assays2[i] & cluster == meta_clusters2[i]) %>% pull(name)  
-    })
+      dat2 %>% filter(assay == meta_assays2[i] & cluster == meta_clusters2[i]) %>% pull(gene)  
+    }) # 这里拖慢速度
 
     cl <- makeCluster(cores)
     registerDoParallel(cl)
@@ -326,7 +335,7 @@ fuse_jaccardmat <- function(jaccard.mat1, jaccard.mat2, cores){
 #' @export
 get_module <- function(jaccard_mat,acc_list_sta,p_thres=0.8,m_thres=0.9){
 
-    nm1 <- round(dim(jaccard_mat)[1]/15,0)
+    nm1 <- max(round(dim(jaccard_mat)[1]/15,0),1)
     nm2 <- round(dim(jaccard_mat)[1],0)
 
     purity <- 0
@@ -388,6 +397,7 @@ get_cluster_acc <- function(jaccard_mat, clusters, types){
 #'
 #' @export
 get_cluster_ratio <- function(jaccard.mat, info, layer){
+  
     require(dplyr)
 
     jaccard_mat <- jaccard.mat[[1]]
@@ -472,6 +482,7 @@ get_info <- function(seulist, type){
   if (type == 'query'){
     colnames(info) <- c('Sample', 'Cell','Cluster')
   } else {
+    info <- info[,c("scPlantGM.sample","scPlantGM.refanno","scPlantGM.cellname","scPlantGM.cluster")]
     colnames(info) <- c('Sample', 'Annotation', 'Cell','Cluster')
   }
 
@@ -502,11 +513,13 @@ get_layers <- function(info_reference,info_layer){
       cellanno_layer <- cellanno  %>% filter(Annotation %in% layer_strc[[layer_num]])
       layer_strc$Annotation <- layer_strc[[layer_num]]
       cellanno_layer <- left_join(cellanno_layer,layer_strc,by = 'Annotation')
-      if (layer_num!=dim(info_layer)[2]){
-        cellanno_layer <- cbind(cellanno_layer, as.data.frame(slash_form[1:dim(cellanno_layer)[1],dim(slash_form)[2]:(layer_num+1)]))
+      if(nrow(cellanno_layer)>0){
+        if (layer_num!=dim(info_layer)[2]){
+          cellanno_layer <- cbind(cellanno_layer, as.data.frame(slash_form[1:dim(cellanno_layer)[1],dim(slash_form)[2]:(layer_num+1)]))
+        }
+        colnames(cellanno_layer) <- c('Cell','Annotation',paste0(c('Celltype'),1:dim(info_layer)[2],sep=''))
+        layer_form <- rbind(layer_form,cellanno_layer)
       }
-      colnames(cellanno_layer) <- c('Cell','Annotation',paste0(c('Celltype'),1:dim(info_layer)[2],sep=''))
-      layer_form <- rbind(layer_form,cellanno_layer)
     }
     layer_result <- left_join(info_reference,layer_form,by=c("Cell",'Annotation'))
     layer_result[is.na(layer_result)] <- '/'

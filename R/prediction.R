@@ -23,12 +23,15 @@ scPlantGM <- function(query, reference, species, organ,
     require(dplyr)
     require(tidyr)
     require(doParallel)
+    require(parallel)
+    require(doParallel)
 
     allcores <- detectCores()
     if (is.na(cores)==TRUE){
-        cores <- ceiling(allcores/2)
+        cores <- 1
     } else if (0<cores & cores<=allcores) {
         cores <- cores
+        message("Using ", cores, " cores for parallel computation")
     } else if(cores>allcores){
         warning('Input cores exceed available system cores. Default cores will be used!')
         cores <- ceiling(allcores/2)
@@ -39,30 +42,39 @@ scPlantGM <- function(query, reference, species, organ,
     info_query <- get_info(query, 'query')
 
     if(custom == 'None'){
-        load(paste('scPlantGM/data/jaccard.mat_', species, '.rda', sep = ''))
+        data(list=sprintf('jaccard.mat_%s', species), package = "scPlantGM")
+        # load(paste('scPlantGM/data/jaccard.mat_', species, '.rda', sep = ''))
         jaccard_mat_ref <- get(paste('jaccard.mat_', species, sep = '')[1])
-        load(paste('scPlantGM/data/info_', species,'.rda', sep = ''))
+        data(list=paste('info_', species, sep = ''), package = "scPlantGM")
+        # load(paste('scPlantGM/data/info_', species,'.rda', sep = ''))
         info_reference <- get(paste('info_', species, sep = ''))
         info_reference <- info_reference %>% filter(Organ==organ)
+
+        # load layer info
+        data("layer_info_Arabidopis", package = "scPlantGM")
+        layer_info <- layer_info_Arabidopis %>% dplyr::filter(Organ==organ) %>% dplyr::select(Celltype1,Celltype2,Celltype3)
+
     } else if(custom == 'All') {
         info_reference <- get_info(reference, type ='reference')
-        if (layer_info != NA){
-            info_reference <- get_layers(info_reference, layer_info)
+        if (!all(is.na(layer_info))){
+            info_reference <- get_layers(info_reference=info_reference, info_layer=layer_info)
         }
-        jaccard_mat_ref <- get_jaccardmat(reference,type = 'reference',cores)
+        jaccard_mat_ref <- get_jaccardmat(reference,type = 'reference', cores)
     } else if (custom == 'Semi') {
         info_reference1 <- get_info(reference, type='reference')
         jaccard_mat_ref1 <- get_jaccardmat(reference,'reference',cores)
 
-        load(paste('scPlantGM/data/jaccard.mat_', species, '.rda', sep = ''))
+        data(list=paste('jaccard.mat_', species, sep = ''), package = "scPlantGM")
+        # load(paste('scPlantGM/data/jaccard.mat_', species, '.rda', sep = ''))
         jaccard_mat_ref2 <- get(paste('jaccard.mat_', species, sep = '')[1])
-        load(paste('scPlantGM/data/info_', species,'.rda', sep = ''))
+        data(list=paste('info_', species, sep = ''), package = "scPlantGM")
+        # load(paste('scPlantGM/data/info_', species,'.rda', sep = ''))
         info_reference2 <- get(paste('info_', species, sep = ''))
         info_reference2 <- info_reference2 %>% filter(Organ==organ) %>% 
                            select('Sample', 'Annotation', 'Cell','Cluster') %>% 
                            filter(Annotation %in% setdiff(unique(unlist(layer_info)),'/'))
         info_reference <- rbind(info_reference1,info_reference2)
-        if (layer_info != NA){
+        if (!all(is.na(layer_info))){
             info_reference <- get_layers(info_reference,layer_info)
         }
 
@@ -70,14 +82,17 @@ scPlantGM <- function(query, reference, species, organ,
     } else {
         stop('Please input a correct value for custom!')
     }
+    message('Identifying top markers for reference clusters... done')
 
     jaccard_mat_que <- get_jaccardmat(query, 'query',cores)
+    message('Identifying top markers for query clusters... done')
     #jaccard_mat_que = readRDS('/public/workspace/jiangz/xuankun/wrapR/test/newdata_jm.rds')
-    jaccard_mat <- fuse_jaccardmat(jaccard_mat_que, jaccard_mat_ref,cores)
-    print('Jaccard.matrix calculation DONE!')
+    jaccard_mat <- fuse_jaccardmat(jaccard_mat_que, jaccard_mat_ref, cores)
+    message('Calculating Jaccard matrix... done')
 
     #refsample <- info_reference$Sample
-    cluster1 <- info_reference %>% select(Cluster) %>% unique() %>% unlist() %>% as.character()
+    cluster1 <- info_reference %>% filter(Annotation %in% as.character(unlist(layer_info))) %>% 
+                select(Cluster) %>% unique() %>% unlist() %>% as.character() 
     cluster2 <- info_query %>% select(Cluster) %>% unique() %>% unlist() %>% as.character()
     cluster2 <- intersect(cluster2,rownames(jaccard_mat))
 
@@ -86,19 +101,20 @@ scPlantGM <- function(query, reference, species, organ,
     Cluster1 <- info_query$Cluster[match(cells2,info_query$Cell)]
 
     if (custom=='None'){
-        load(paste('scPlantGM/data/acc_list_sta_all_', species, '.rda', sep = ''))
+        data(list=paste('acc_list_sta_all_', species, sep = ''), package = "scPlantGM")
+        # load(paste('scPlantGM/data/acc_list_sta_all_', species, '.rda', sep = ''))
         acc_list_sta_all <- get(paste('acc_list_sta_all_', species, sep = ''))
     } else {
         acc_list_sta_all <- get_cluster_ratio(jaccard_mat_ref, info_reference, layer)
     }
     acc_list_sta <- acc_list_sta_all[[1]]
 
-    jaccard_mat_ref <- jaccard_mat_ref[[1]]
-    jaccard_mat_remain1 <- jaccard_mat_ref[which(colnames(jaccard_mat_ref) %in% cluster1), which(colnames(jaccard_mat_ref) %in% cluster1), drop = FALSE]
+    jaccard_mat_ref1 <- jaccard_mat_ref[[1]]
+    jaccard_mat_remain1 <- jaccard_mat_ref1[which(colnames(jaccard_mat_ref1) %in% cluster1), which(colnames(jaccard_mat_ref1) %in% cluster1), drop = FALSE]
     bestmodule <- get_module(jaccard_mat=jaccard_mat_remain1,acc_list_sta,p_thres,m_thres)
     out.id <- bestmodule[[1]]
     k <- bestmodule[[2]]
-    print(paste(k,'modules projection to cells DONE!',sep = ' '))
+    message("Projecting ", k, " modules to cells... done")
 
     if (layer==0){
         acc_list_sta_new0 <- module_celltype(acc_list_sta_all[[1]], out.id, k)
@@ -112,15 +128,15 @@ scPlantGM <- function(query, reference, species, organ,
     jaccard_mat_re <- jaccard_mat[which(rownames(jaccard_mat) %in% cluster2), which(colnames(jaccard_mat) %in% cluster1), drop = FALSE]
     jaccard_mat0 <- c()
     for(j in 1:length(table(out.id))){
-        tmpmat <- jaccard_mat_re[,which(out.id==j), drop = FALSE]
+        tmpmat <- jaccard_mat_re[,names(which(out.id==j)), drop = FALSE]
         jaccard_mat0 <- cbind(jaccard_mat0,rowMeans(tmpmat))
     }
     colnames(jaccard_mat0) <- names(acc_list_sta_new0)[-length(acc_list_sta_new0)]
-               
+    
     accuracy <- acc_list_sta_new0[[length(acc_list_sta_new0)]]
     types0 <- names(accuracy)
 
-    pred_tmp <- cbind(rownames(jaccard_mat0),types0[apply(jaccard_mat0, 1, which.max)],accuracy[apply(jaccard_mat0, 1, which.max)])
+    pred_tmp <- cbind(rownames(jaccard_mat0), types0[apply(jaccard_mat0, 1, which.max)], accuracy[apply(jaccard_mat0, 1, which.max)])
     pred_tmp <- data.frame(pred_tmp)
     colnames(pred_tmp) <- c("Cluster","prediction","probility")
 
@@ -175,7 +191,7 @@ scPlantGM <- function(query, reference, species, organ,
       }
     }
     result <- left_join(info_query['Cell'], result, by = 'Cell')
-    result <- result  %>% separate(Cell, into=c('Sample','Cell'),sep=':') %>% select(-Sample)
+    result <- result %>% tidyr::separate(Cell, into=c('Sample','Cell'),sep=':') %>% select(-Sample)
 
     prob_names = colnames(result %>% select(starts_with('probility')))
     for (prob_name in prob_names){
@@ -184,6 +200,8 @@ scPlantGM <- function(query, reference, species, organ,
     }
 
     result <- result %>% select(-starts_with('probility'))
+    result$prediction <- result$prediction2
+    result$prediction[which(result$prediction2=="/")] <- result$prediction1[which(result$prediction2=="/")]
 
     return(result)                        
 }

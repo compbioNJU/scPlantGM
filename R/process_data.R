@@ -10,6 +10,9 @@
 #' @examples query <- process_obj(query, seuorder, 'query')
 
 process_obj <- function(seulist, seuorder, type='query'){
+
+    require(Seurat)
+    
     if(class(seulist) == 'Seurat'){
         seulist <- list(seulist)
     } else if(class(seulist) == 'list'){
@@ -30,9 +33,6 @@ process_obj <- function(seulist, seuorder, type='query'){
     for (num in 1:length(seulist)){
         rds <- seulist[[num]]
         rds@meta.data$scPlantGM.sample <- rep(as.character(seuorder[num]),times=dim(rds)[2])
-        if (type == 'reference'){
-            rds@meta.data$scPlantGM.refanno <- rep(NA, times=dim(rds)[2])            
-        }
         new_seulist <- c(new_seulist,rds)
 
         if (!("seurat_clusters" %in% colnames(rds@meta.data))){
