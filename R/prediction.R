@@ -54,6 +54,11 @@ scPlantGM <- function(query, reference, species, organ,
         data("layer_info_Arabidopis", package = "scPlantGM")
         layer_info <- layer_info_Arabidopis %>% dplyr::filter(Organ==organ) %>% dplyr::select(Celltype1,Celltype2,Celltype3)
 
+        allcluster <- intersect(unique(info_reference$Cluster),colnames(jaccard_mat_ref$out))
+        jaccard_mat_ref$out <- jaccard_mat_ref$out[allcluster,allcluster]
+        jaccard_mat_ref$dat <- jaccard_mat_ref$dat[which(jaccard_mat_ref$dat$clusterID %in% allcluster),]
+        jaccard_mat_ref$meta <- jaccard_mat_ref$meta[allcluster,]
+
     } else if(custom == 'All') {
         info_reference <- get_info(reference, type ='reference')
         if (!all(is.na(layer_info))){
@@ -79,6 +84,7 @@ scPlantGM <- function(query, reference, species, organ,
         }
 
         jaccard_mat_ref <- fuse_ref_jm(jaccard_mat_ref1,jaccard_mat_ref2,info_reference2,cores)
+
     } else {
         stop('Please input a correct value for custom!')
     }

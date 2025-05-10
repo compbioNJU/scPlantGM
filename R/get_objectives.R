@@ -291,12 +291,14 @@ fuse_jaccardmat <- function(jaccard.mat1, jaccard.mat2, cores){
     meta_list1 <- lapply(1:nrow(meta1), function(i) {  
       dat1 %>% filter(assay == meta_assays1[i] & cluster == meta_clusters1[i]) %>% pull(gene)  
     })  
+    names(meta_list1) <- paste(meta_assays1, meta_clusters1, sep=":")
 
     meta_assays2 <- meta2$assay
     meta_clusters2 <- meta2$cluster
     meta_list2 <- lapply(1:nrow(meta2), function(i) {  
       dat2 %>% filter(assay == meta_assays2[i] & cluster == meta_clusters2[i]) %>% pull(gene)  
-    }) # 这里拖慢速度
+    }) 
+    names(meta_list2) <- paste(meta_assays2, meta_clusters2, sep=":")
 
     cl <- makeCluster(cores)
     registerDoParallel(cl)
