@@ -3,7 +3,7 @@
 
 
 # Overview
-<img width="779" alt="17597cda3b3a538529cfcdd23c9e301" src="https://github.com/user-attachments/assets/d1efd773-230b-4f19-8b43-c1d693b3c084" />
+<img width="2274" height="1332" alt="Figure 2" src="https://github.com/user-attachments/assets/611dc24b-5573-4491-a5e3-8ef0d2b8638d" />
 
 
 # Installation
@@ -204,3 +204,4 @@ Lu, K., et al. A gene module-based framework for plant cell atlas annotation and
 
 # Contact us
 If you have any question, suggestion or bug found in the method, feel free to contact us! Email: dijunchen@nju.edu.cn; Lukaiyann@163.com
+
