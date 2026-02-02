@@ -8,7 +8,7 @@
 #' @return markers
 #'
 #' @export
-get_markers <- function(object, clustername, topn, cores){
+get_markers <- function(object, clustername, topn, cores, avg.log2fc.threshold = 0.25){
   
     require(dplyr)
     require(doMC)
@@ -34,16 +34,21 @@ get_markers <- function(object, clustername, topn, cores){
         }
     }else{
         top.markers <- FindAllMarkers(object, min.pct=0.1, logfc.threshold=0.1,
-                                        return.thresh=0.1, only.pos=TRUE, verbose = FALSE) ## return.thresh=0.01, test.use="wilcox"
+                                        return.thresh=0.1, only.pos=TRUE, 
+                                        verbose = FALSE) ## return.thresh=0.01, test.use="wilcox"
     }
     stopCluster(cl)
 
     top.markers$pct.diff <- top.markers$pct.1 - top.markers$pct.2
-    top.markers$name <- object@misc$geneName[top.markers$gene]
+    if(is.null(object@misc$geneName)){
+      top.markers$name <- top.markers$gene
+    }else{
+      top.markers$name <- object@misc$geneName[top.markers$gene]
+    }    
 
     ## keep top 100 marker
     topmarkers <- top.markers %>% 
-      filter(p_val_adj < 0.05 & pct.1>0.2 & avg_log2FC > 0.25 & !grepl("^MT-", name)) %>% 
+      filter(p_val_adj < 0.05 & pct.1>0.2 & avg_log2FC > avg.log2fc.threshold & !grepl("^MT-", name)) %>% 
       dplyr::group_by(cluster)  %>% 
       dplyr::top_n(n=topn, wt=avg_log2FC) 
     
@@ -64,7 +69,7 @@ get_markers <- function(object, clustername, topn, cores){
 #' @export
 
 get_gene_list <- function(seulist, seuorder, clustername, topn, cores, 
-                          topmarkers_list = NULL){
+                          topmarkers_list = NULL, avg.log2fc.threshold = 0.25){
 
     require(Seurat)
     require(dplyr)
@@ -72,7 +77,7 @@ get_gene_list <- function(seulist, seuorder, clustername, topn, cores,
 
     if(is.null(topmarkers_list)){
         sdat <- lapply(seq_along(seulist), function(x) {
-          topmarkers <- get_markers(seulist[[x]], clustername, topn, cores)
+          topmarkers <- get_markers(object = seulist[[x]], clustername, topn, cores, avg.log2fc.threshold = 0.25)
           topmarkers$clusterID <- paste(seuorder[x], topmarkers$cluster, sep=":")
           topmarkers
         }
@@ -197,7 +202,7 @@ get_sim_mat <- function(gene_list1, gene_list2 = NULL, cores){
 #' @export
 get_module <- function(sim_mat, acc_list_sta, m_thres=0.8, p_thres=0.8, min_nm = NULL){ 
 
-    min_nm <- max(round(dim(sim_mat)[1]/15,0),1,min_nm)
+    min_nm <- max(round(dim(sim_mat)[1]/10,0),1,min_nm)
     max_nm <- round(dim(sim_mat)[1],0)
     if(min_nm>max_nm){
         min_nm <- max_nm
@@ -422,7 +427,8 @@ get_info <- function(seulist, type, clustername){
   info <- data.frame()
   for (rds_num in 1:length(seulist)){
     rds_info <- seulist[[rds_num]]@meta.data %>% select(starts_with('scPlantGM'))
-    rds_info$scPlantGM.cellname <- paste(rds_info$scPlantGM.sample, rownames(rds_info),sep=':')
+    rds_info$scPlantGM.cellname <- rownames(rds_info)
+    # rds_info$scPlantGM.cellname <- paste(rds_info$scPlantGM.sample, rownames(rds_info),sep=':')
     rds_info$scPlantGM.cluster <- paste(rds_info$scPlantGM.sample, unlist(seulist[[rds_num]][[clustername]]), sep=':')
     rds_info <- rds_info %>% select(starts_with('scPlantGM'))
     info <- rbind(info,rds_info)
@@ -453,7 +459,7 @@ get_layers <- function(info_reference, info_layer){
     cellanno <- info_reference[,c('Cell','Annotation')]
     spare_cellanno <- setdiff(unique(cellanno$Annotation),unique(unlist(info_layer)))
     if (length(spare_cellanno)!=0){
-      warning(paste('These cell types can not be found in layer information:', paste(spare_cellanno,collapse=', ')), sep=' ')
+      warning(paste('These cell types can not be found in layer information:', paste(spare_cellanno, collapse=', ')), sep=' ')
     }
     layer_form <- data.frame()
     slash_form <- as.data.frame(matrix(rep('/', dim(info_reference)[1] * dim(info_layer)[2]), nrow = dim(info_reference)[1]))

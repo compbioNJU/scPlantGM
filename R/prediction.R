@@ -2,7 +2,7 @@
 #'
 #' @param query A list of query Seurat object
 #' @param reference A list of reference Seurat object (can be ignored if custom='None')
-#' @param topmarkers_ref A list, top markers of each cluster obtained from Seurat pipeline for reference Seurat object
+#' @param topmarkers_ref A data.frame, top markers of each cluster obtained from Seurat pipeline for reference Seurat object
 #' @param topmarkers_query A data.frame, top markers of each cluster obtained from Seurat pipeline for query Seurat object
 #' @param species Species of scRNA-seq data (built-in species: Arabidopis, Maize, Rice)
 #' @param organ Organ of species [Built-in organs: Arabidopis(Root,Leaf,Pollen,Inflorescence), Maize(Root,Leaf), Rice(Root,Leaf)]
@@ -12,7 +12,11 @@
 #' @param p_thres A threshold for determining what level of module purity is acceptable. The higher the value, the purer the module are
 #' @param m_thres A threshold for determining how many modules can be accepted. The higher the value, the more modules can be accepted 
 #' @param x_thres A threshold for determining whether the cell type should be ‘unassigned’
-#' @param cores Number of CPU for running
+#' @param ref_clustername The column name specifying cluster identities in the reference Seurat objects. 
+#' @param query_clustername The column name specifying cluster identities in the query Seurat objects.
+#' @param topn A threshold for determining number of highly expressed gene will be used.
+#' @param cores Number of CPU for running.
+#' @param avg.log2fc.threshold Threshold for determining which top markers to retain.
 #'
 #' @return Prediction result in data.frame
 #' @export
@@ -20,12 +24,12 @@
 #' @examples result -> scPlantGM(query, reference, species = 'Maize', organ = 'Root', layer = 0, custom = 'None')
 
 scPlantGM <- function(query, reference, 
-                        topmarkers_ref = NULL, topmarkers_query = NULL,
-                        species, organ,
-                        custom = 'None', layer_info = NA, layer = 0, 
-                        p_thres = 0.8, m_thres = 0.8, x_thres = 0.2, 
-                        ref_clustername = "seurat_clusters", query_clustername = "seurat_clusters",
-                        topn = 100, cores = NA){
+                      topmarkers_ref = NULL, topmarkers_query = NULL,
+                      species = NULL, organ = NULL,
+                      custom = 'None', layer_info = NA, layer = 0, 
+                      p_thres = 0.8, m_thres = 0.8, x_thres = 0.2, 
+                      ref_clustername = "seurat_clusters", query_clustername = "seurat_clusters",
+                      topn = 100, cores = NA, avg.log2fc.threshold = 0.25){
     require(dplyr)
     require(tidyr)
     require(doParallel)
@@ -90,7 +94,7 @@ scPlantGM <- function(query, reference,
             }
             gene_list_ref <- get_gene_list(seulist = reference, seuorder = names(reference),
                                                  clustername = ref_clustername, topn, cores = cores, 
-                                                 topmarkers_list = topmarkers_ref)
+                                                 topmarkers_list = topmarkers_ref, avg.log2fc.threshold = avg.log2fc.threshold)
             sim_mat_ref <- get_sim_mat(gene_list1 = gene_list_ref, cores = cores) 
 
             # Ensure consistency of clusters
@@ -104,7 +108,7 @@ scPlantGM <- function(query, reference,
             info_reference1 <- get_info(reference, type ='reference', clustername = ref_clustername)
             gene_list_ref1 <- get_gene_list(seulist = reference, seuorder = names(reference),
                                                  clustername = ref_clustername,, topn, cores, 
-                                                 topmarkers_list = topmarkers_ref)
+                                                 topmarkers_list = topmarkers_ref, avg.log2fc.threshold = avg.log2fc.threshold)
             sim_mat_ref1 <- get_sim_mat(gene_list1 = gene_list_ref1, cores = cores) 
 
             # Ensure consistency of clusters
@@ -149,7 +153,7 @@ scPlantGM <- function(query, reference,
 
         gene_list_query <- get_gene_list(seulist = query, seuorder = names(query), 
                                               clustername = query_clustername, topn, cores,
-                                              topmarkers_list = topmarkers_query) 
+                                              topmarkers_list = topmarkers_query, avg.log2fc.threshold = avg.log2fc.threshold)
         # sim_mat_que <- get_sim_mat(gene_list1 = gene_list_query, cores)
         message('Identifying top markers for query clusters... done')
 
@@ -181,18 +185,35 @@ scPlantGM <- function(query, reference,
         } else if(custom == 'All') {
 
             info_reference <- get_info(reference, type ='reference', clustername = ref_clustername)
+            cluster_stats <- info_reference %>%
+                            group_by(Cluster, Annotation) %>%
+                            summarise(count = n(), .groups = 'drop') %>%
+                            group_by(Cluster) %>%
+                            mutate(total_cells = sum(count), proportion = count / total_cells) %>%
+                            # find main Annotation of each cluster
+                            arrange(Cluster, desc(count)) %>%
+                            mutate(rank = row_number(), main_annotation = ifelse(rank == 1, Annotation, NA)
+                            ) %>%
+                            filter(rank == 1)
+            del_cluster <- cluster_stats$Cluster[which(cluster_stats$main_annotation %in% c("Unknow"))]
+            info_reference <- info_reference %>% filter(!Cluster %in% del_cluster)
             if (!all(is.na(layer_info))){
                 info_reference <- get_layers(info_reference, info_layer=layer_info)
             }
+
             gene_list_ref <- get_gene_list(seulist = reference, seuorder = names(reference), 
-                                            clustername = ref_clustername, topn, cores) 
+                                            clustername = ref_clustername, topn, cores, avg.log2fc.threshold = avg.log2fc.threshold)
+            gene_list_ref <- gene_list_ref[!names(gene_list_ref) %in% del_cluster]
+
             sim_mat_ref <- get_sim_mat(gene_list1 = gene_list_ref, cores = cores) 
+            sim_mat_ref <- sim_mat_ref[!rownames(sim_mat_ref) %in% del_cluster, 
+                                        !rownames(sim_mat_ref) %in% del_cluster]
 
         } else if (custom == 'Semi') {
 
             info_reference1 <- get_info(reference, type ='reference', clustername = ref_clustername)
             gene_list_ref1 <- get_gene_list(seulist = reference, seuorder = names(reference), 
-                                            clustername = ref_clustername, topn, cores) 
+                                            clustername = ref_clustername, topn, cores, avg.log2fc.threshold = avg.log2fc.threshold)
             sim_mat_ref1 <- get_sim_mat(gene_list1 = gene_list_ref1, cores = cores) 
 
             data(list=paste('reference_', species, sep = ''), package = "scPlantGM")
@@ -229,7 +250,8 @@ scPlantGM <- function(query, reference,
         }
         message('Identifying top markers for reference clusters... done')
 
-        gene_list_query <- get_gene_list(seulist = query, seuorder, clustername = query_clustername, topn, cores) 
+        gene_list_query <- get_gene_list(seulist = query, seuorder, clustername = query_clustername, 
+                                          topn, cores, avg.log2fc.threshold = avg.log2fc.threshold) 
         # sim_mat_que <- get_sim_mat(gene_list1 = gene_list_query, cores)
         message('Identifying top markers for query clusters... done')
 
@@ -237,7 +259,6 @@ scPlantGM <- function(query, reference,
 
     sim_mat_cross <- get_sim_mat(gene_list1 = gene_list_query, gene_list2 = gene_list_ref, cores) 
     message('Calculating similarity matrix... done')
-
 
     cells2 <- info_query %>% filter(Cluster %in% rownames(sim_mat_cross)) %>% 
                 select(Cell) %>% unlist() %>% as.character()
@@ -248,17 +269,17 @@ scPlantGM <- function(query, reference,
         # load(paste('data/acc_list_sta_all_', species, '.rda', sep = ''))
         acc_list_sta_all <- get(paste('acc_list_sta_all_', species, sep = ''))
     } else {
-        acc_list_sta_all <- get_cluster_ratio(sim_mat_ref, info_reference, layer = layer)
+        acc_list_sta_all <- get_cluster_ratio(sim_mat = sim_mat_ref, info = info_reference, layer = layer)
     }
     acc_list_sta <- acc_list_sta_all$layer0
 
     ncelltype <- length(unique(info_reference$Annotation))
-    bestmodule <- get_module(sim_mat = sim_mat_ref, acc_list_sta, m_thres, p_thres, min_nm = ncelltype)
+    bestmodule <- get_module(sim_mat = sim_mat_ref, acc_list_sta, m_thres, p_thres, min_nm = 4*ncelltype)
     out.id <- bestmodule$ids
     k <- bestmodule$best_nm
     message("Projecting ", k, " modules to cells... done")
 
-    
+
     if (layer==0){
         acc_list_sta_new1 <- module_celltype(acc_list_sta_all$layer0, out.id, k)
         layer_init = 0
@@ -312,11 +333,14 @@ scPlantGM <- function(query, reference,
     accuracy <- acc_list_sta_new1[[length(acc_list_sta_new1)]]
     types1 <- names(accuracy)
 
-    pred_tmp <- cbind(rownames(sim_mat_cross1), types1[apply(sim_mat_cross1, 1, which.max)], apply(sim_mat_cross1, 1, max))
+    pred_tmp <- cbind(rownames(sim_mat_cross1), 
+                      types1[apply(sim_mat_cross1, 1, which.max)], 
+                      apply(sim_mat_cross1, 1, max))
     pred_tmp <- data.frame(pred_tmp)
     colnames(pred_tmp) <- c("Cluster","prediction", "similarity")
 
-    result <- data.frame(Cell = cells2, Cluster = Cluster1)
+    result <- data.frame(Sample = info_query$Sample[match(cells2, info_query$Cell)], 
+                          Cell = cells2, Cluster = Cluster1)
     result$prediction1 <- pred_tmp$prediction[match(result$Cluster, pred_tmp$Cluster)]   
     result$similarity1 <- round(as.numeric(pred_tmp$similarity[match(result$Cluster, pred_tmp$Cluster)]),4) 
     print(paste('Layer ', layer_init, ' DONE!',sep = '')) 
@@ -352,7 +376,7 @@ scPlantGM <- function(query, reference,
             }
         }else{
             result2 <- as.data.frame(matrix(nrow = 0, ncol = 5))
-            colnames(result2) <- c("Cell", "Cluster", "annotation2", "prediction2", "similarity2")
+            colnames(result2) <- c("Cell", "Cluster", "prediction2", "similarity2")
         }
         result <- merge(result, result2, by = c("Cell","Cluster"), all = TRUE)
         print("Layer 2 DONE!")
@@ -361,7 +385,6 @@ scPlantGM <- function(query, reference,
 
     if(layer>2){  
         
-        # type2 <- unique(c(names(table(result$annotation2)),names(table(result$prediction2))))
         type2 <- unique(names(table(result$prediction2)))
 
         if(!is.null(type2)){
@@ -398,7 +421,6 @@ scPlantGM <- function(query, reference,
                 result <- merge(result, result3, by =  c("Cell","Cluster"), all = TRUE)
 
             }else{
-                result$annotation3 <- "/"
                 result$prediction3 <- "/"
                 result$similarity3 <- result$similarity2              
             }
@@ -419,11 +441,11 @@ scPlantGM <- function(query, reference,
         result[pos1, (loc_prob - 1)] <- "unassigned"
 
         if(prob_name == "similarity3"){
-            result[pos1, c("prediction3", "similarity3")] <- "unassigned"
+            result[pos1, c("prediction3")] <- "unassigned"
         }
 
         if(prob_name == "similarity2"){
-            result[pos1, c("prediction2", "similarity2")] <- "unassigned"
+            result[pos1, c("prediction2")] <- "unassigned"
         }
     }
     

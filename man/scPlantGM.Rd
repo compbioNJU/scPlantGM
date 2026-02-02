@@ -9,8 +9,8 @@ scPlantGM(
   reference,
   topmarkers_ref = NULL,
   topmarkers_query = NULL,
-  species,
-  organ,
+  species = NULL,
+  organ = NULL,
   custom = "None",
   layer_info = NA,
   layer = 0,
@@ -20,7 +20,8 @@ scPlantGM(
   ref_clustername = "seurat_clusters",
   query_clustername = "seurat_clusters",
   topn = 100,
-  cores = NA
+  cores = NA,
+  avg.log2fc.threshold = 0.25
 )
 }
 \arguments{
@@ -28,7 +29,7 @@ scPlantGM(
 
 \item{reference}{A list of reference Seurat object (can be ignored if custom='None')}
 
-\item{topmarkers_ref}{A list, top markers of each cluster obtained from Seurat pipeline for reference Seurat object}
+\item{topmarkers_ref}{A data.frame, top markers of each cluster obtained from Seurat pipeline for reference Seurat object}
 
 \item{topmarkers_query}{A data.frame, top markers of each cluster obtained from Seurat pipeline for query Seurat object}
 
@@ -48,7 +49,15 @@ scPlantGM(
 
 \item{x_thres}{A threshold for determining whether the cell type should be ‘unassigned’}
 
-\item{cores}{Number of CPU for running}
+\item{ref_clustername}{The column name specifying cluster identities in the reference Seurat objects.}
+
+\item{query_clustername}{The column name specifying cluster identities in the query Seurat objects.}
+
+\item{topn}{A threshold for determining number of highly expressed gene will be used.}
+
+\item{cores}{Number of CPU for running.}
+
+\item{avg.log2fc.threshold}{Threshold for determining which top markers to retain.}
 }
 \value{
 Prediction result in data.frame

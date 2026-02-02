@@ -4,7 +4,7 @@
 \alias{get_markers}
 \title{get markers from Seurat object}
 \usage{
-get_markers(object, clustername, topn, cores)
+get_markers(object, clustername, topn, cores, avg.log2fc.threshold = 0.25)
 }
 \arguments{
 \item{object}{a Seurat object}

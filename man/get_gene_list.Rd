@@ -10,7 +10,8 @@ get_gene_list(
   clustername,
   topn,
   cores,
-  topmarkers_list = NULL
+  topmarkers_list = NULL,
+  avg.log2fc.threshold = 0.25
 )
 }
 \arguments{
